@@ -1,4 +1,5 @@
-**Instagram Reels DM Pipeline**
+**Instagram Reels DM Pipeline**:
+
 Pipeline para extrair links de Reels (mensagens diretas), coletar legendas, transcrever áudio em várias línguas e agregar resultados em batches para processamento final com IA.
 
 **Overview**
@@ -10,6 +11,7 @@ Pipeline para extrair links de Reels (mensagens diretas), coletar legendas, tran
 - **TamperMonkey Analyzer**: [reelsLinkAnalyzer.js](reelsLinkAnalyzer.js) — roda em TamperMonkey para visitar cada link e salvar a `caption` (legenda) no localStorage, depois exportar JSON.
 - **Transcrição/Download**: [reelsAsMp3.py](reelsAsMp3.py) — baixa áudio via `yt_dlp` e usa `whisper` para transcrever em várias línguas.
 - **Agregador de Batches**: [reelsBatches.py](reelsBatches.py) — junta arquivos JSON de batches em um arquivo final.
+- **Compilador RICH_DOC**: [reelsCompiler.py](reelsCompiler.py) — gera guias em Markdown estruturadas processando lotes de vídeos com **Google Generative AI (Gemini)**.
 
 
 **Requisitos**
@@ -17,6 +19,9 @@ Pipeline para extrair links de Reels (mensagens diretas), coletar legendas, tran
 - Node/Browser: Console DevTools (Chrome/Chromium/Edge) + TamperMonkey para o Analyzer
 - Python packages (exemplos):
 	- `pip install yt-dlp openai-whisper torch` (para `reelsAsMp3.py` — ajuste `torch` conforme GPU/CPU)
+	- `pip install google-generativeai` (para `reelsCompiler.py` — compilador com Gemini)
+- **Variáveis de Ambiente**:
+	- `GEMINI` — sua API Key do Google Generative AI (obtenha em [ai.google.dev](https://ai.google.dev))
 
 **1) Extrair links (DevTools Console)**
 - Abra o Instagram no navegador, no painel onde aparecem as miniaturas/DMs.
@@ -58,8 +63,42 @@ python reelsBatches.py
 
 - Isso juntará todos os `batch_*.json` em `todos_videos_transcritos_final.json`.
 
-**5) Processamento final com IA / Montagem de Guias**
-- Use o arquivo final `todos_videos_transcritos_final.json` para gerar documentos, sumarizações ou guias.
+**5) Compilar Guia com IA (reelsCompiler.py)**
+- Pré-requisitos: arquivo JSON de entrada com estrutura `[{url, caption, transcription}, ...]` e variável de ambiente `GEMINI` configurada.
+- Configurar antes de rodar:
+  - `ARQUIVO_ENTRADA`: caminho do JSON processado (ex: `captions/caption_processed_1.json`)
+  - `ARQUIVO_SAIDA`: nome do arquivo Markdown de saída (ex: `GUIA_DE_VIAGEM_TOKYO_1.md`)
+  - `MODELO`: modelo Gemini a usar (padrão: `gemini-1.5-flash`)
+
+- Rodar:
+
+```bash
+# Configurar API Key (Windows PowerShell)
+$env:GEMINI = "sua-api-key-do-google"
+python reelsCompiler.py
+
+# Ou (Cmd)
+set GEMINI=sua-api-key-do-google
+python reelsCompiler.py
+```
+
+- O script processa em lotes (padrão: 10 vídeos por lote), envia para Gemini analisar e gera um **Guia em Markdown estruturado** contendo:
+  - Nome do Local/Atividade
+  - Categoria (Comida, Compras, Passeio, etc.)
+  - Resumo em PT-BR
+  - Dicas práticas extraídas
+  - Links para os vídeos originais
+
+- Saída: arquivo Markdown (`GUIA_DE_VIAGEM_TOKYO_1.md`) pronto para publicação.
+
+Destaques:
+- **Processamento inteligente**: Gemini traduz conteúdo em Japonês/Coreano/Inglês automaticamente
+- **Tratamento de transcrições**: ignora áudio puramente musical
+- **Segurança relaxada**: configurações de safety bloqueadas em nível LOW para máxima flexibilidade
+- **Rate limiting**: aguarda 4 segundos entre lotes, reduzindo taxa para 10 segundos em caso de erro
+
+**6) Processamento final com IA / Montagem de Guias**
+- Use o arquivo Markdown gerado por `reelsCompiler.py` diretamente ou processe novamente o `todos_videos_transcritos_final.json`.
 - Exemplo rápido: envie cada `caption` + `transcription` para um LLM (OpenAI / local) solicitando:
 	- Resumo
 	- Tags/temas
@@ -73,12 +112,19 @@ Recomendações práticas:
 **Exemplo de pipeline (comandos)**
 ```bash
 # 1) Extrair links: cole reelsLinkScrapper.js no Console do navegador
+
 # 2) No TamperMonkey, configure LINK_LIST e execute reelsLinkAnalyzer.js para gerar batches de captions
+
 # 3) Baixar áudio e transcrever
 python reelsAsMp3.py
-# 4) Agregar
+
+# 4) Agregar batches
 python reelsBatches.py
-# 5) Processar `todos_videos_transcritos_final.json` com seu script/IA
+
+# 5) Gerar Guia com Gemini (compilar RICH_DOC)
+$env:GEMINI = "sua-chave-api"  # PowerShell
+python reelsCompiler.py
+# Saída: GUIA_DE_VIAGEM_TOKYO_1.md (pronto para publicação)
 
 ```
 
@@ -92,6 +138,7 @@ python reelsBatches.py
 - [reelsLinkAnalyzer.js](reelsLinkAnalyzer.js)
 - [reelsAsMp3.py](reelsAsMp3.py)
 - [reelsBatches.py](reelsBatches.py)
+- [reelsCompiler.py](reelsCompiler.py) — **Compilador com Google Generative AI**
 
 **Próximos passos sugeridos**
 - Automatizar a conversão final com um script que chama a API do LLM para gerar guias a partir do JSON final.
